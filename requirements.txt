@@ -1,21 +1,7 @@
-# Interfaz de Usuario
 streamlit
-
-# Cliente de Inferencia (Llama 3.3)
 groq
-
-# Procesamiento de Lenguaje Natural (NLP)
 scikit-learn
 nltk
-tiktoken
-
-# Manipulación de Datos y Matemáticas
 pandas
-numpy
-
-# Visualización de Datos
 plotly
-matplotlib
-
-# Gestión de Variables de Entorno (Opcional pero recomendado)
-python-dotenv
+tiktoken
