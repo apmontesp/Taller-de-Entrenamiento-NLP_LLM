@@ -6,133 +6,151 @@ from groq import Groq
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 import nltk
 from nltk.util import ngrams
+import plotly.express as px
 
-# --- CONFIGURACIÓN Y RECURSOS NLTK ---
-def setup_nltk():
-    resources = ['punkt', 'punkt_tab']
-    for res in resources:
-        try:
-            nltk.data.find(f'tokenizers/{res}')
-        except LookupError:
-            nltk.download(res, quiet=True)
+# --- RECURSOS NLTK ---
+@st.cache_resource
+def load_nltk():
+    nltk.download('punkt', quiet=True)
+    nltk.download('punkt_tab', quiet=True)
 
-setup_nltk()
+load_nltk()
 
-st.set_page_config(page_title="Taller NLP & LLM - EAFIT", layout="wide")
+st.set_page_config(page_title="NLP & LLM Dashboard | EAFIT", layout="wide")
 
-# --- MANEJO DE API KEY ---
-# Reemplaza 'TU_API_KEY_AQUI' con tu llave real si quieres que sea automática
-# O déjala vacía para ingresarla en la interfaz.
-DEFAULT_API_KEY = "TU_API_KEY_AQUI" 
+# --- API KEY & CLIENTE ---
+# Puedes poner tu API Key aquí directamente
+API_KEY = "TU_API_KEY_AQUI" 
 
-if "GROQ_API_KEY" not in st.session_state:
-    st.session_state.GROQ_API_KEY = DEFAULT_API_KEY
+if "api_key" not in st.session_state:
+    st.session_state.api_key = API_KEY
 
 with st.sidebar:
-    st.title("⚙️ Configuración")
-    api_input = st.text_input("Groq API Key:", value=st.session_state.GROQ_API_KEY, type="password")
-    st.session_state.GROQ_API_KEY = api_input
-    
-    selected_model = st.selectbox("Modelo", ["llama-3.3-70b-versatile", "llama3-8b-8192"])
+    st.title("🛠️ Configuración")
+    st.session_state.api_key = st.text_input("Groq API Key:", value=st.session_state.api_key, type="password")
+    model_name = st.selectbox("Modelo", ["llama-3.3-70b-versatile", "llama3-8b-8192"])
     
     st.divider()
-    section = st.radio("Menú del Taller:", 
-                      ["Tokenización & Encoding", "Vectorización Clásica", 
-                       "Modelado de Secuencias", "Chat Multivariante (Agente)"])
+    menu = st.radio("Secciones:", ["Fundamentos NLP", "Agente & Comparativa"])
 
-if not st.session_state.GROQ_API_KEY or st.session_state.GROQ_API_KEY == "TU_API_KEY_AQUI":
-    st.warning("⚠️ Por favor, ingresa una API Key válida en la barra lateral.")
+if not st.session_state.api_key or st.session_state.api_key == "TU_API_KEY_AQUI":
+    st.warning("⚠️ Ingresa tu API Key en la barra lateral.")
     st.stop()
 
-client = Groq(api_key=st.session_state.GROQ_API_KEY)
+client = Groq(api_key=st.session_state.api_key)
 
-# --- SECCIONES DE NLP CLÁSICO ---
-if section == "Tokenización & Encoding":
-    st.header("🔤 Tokenización y Encoding")
-    text = st.text_area("Texto:", "El procesamiento de lenguaje natural en EAFIT.")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("Word-level (NLTK)")
-        st.write(nltk.word_tokenize(text))
-    with c2:
-        st.subheader("BPE (Llama Style)")
+# --- SECCIÓN 1: FUNDAMENTOS ---
+if menu == "Fundamentos NLP":
+    st.header("🧠 Fundamentos de NLP")
+    
+    tab1, tab2, tab3 = st.tabs(["Tokenización", "Vectorización", "Secuencias"])
+    
+    with tab1:
+        txt = st.text_input("Texto para tokenizar:", "El procesamiento de lenguaje natural es clave.")
+        c1, c2 = st.columns(2)
+        c1.write("**Word-level (NLTK):**")
+        c1.write(nltk.word_tokenize(txt))
+        c2.write("**BPE (Llama-style):**")
         enc = tiktoken.get_encoding("cl100k_base")
-        st.write([enc.decode([t]) for t in enc.encode(text)])
+        c2.write([enc.decode([t]) for t in enc.encode(txt)])
 
-elif section == "Vectorización Clásica":
-    st.header("📊 BoW y TF-IDF")
-    corpus = st.text_area("Corpus (línea por frase):", "IA en EAFIT\nCiencia de datos\nIA y datos").split('\n')
-    corpus = [c for c in corpus if c.strip()]
-    if corpus:
-        cv = CountVectorizer()
-        tfidf = TfidfVectorizer()
-        st.write("**Matriz BoW:**", pd.DataFrame(cv.fit_transform(corpus).toarray(), columns=cv.get_feature_names_out()))
-        st.write("**Matriz TF-IDF:**", pd.DataFrame(tfidf.fit_transform(corpus).toarray(), columns=tfidf.get_feature_names_out()))
+    with tab2:
+        corpus = st.text_area("Corpus (línea por frase):", "Análisis de suelos\nEstabilidad de taludes\nAnálisis de taludes").split('\n')
+        if st.button("Vectorizar"):
+            tfidf = TfidfVectorizer()
+            mtx = tfidf.fit_transform([c for c in corpus if c.strip()])
+            df = pd.DataFrame(mtx.toarray(), columns=tfidf.get_feature_names_out())
+            st.dataframe(df)
 
-elif section == "Modelado de Secuencias":
-    st.header("🔗 N-Grams y Arquitecturas")
-    txt = st.text_input("Texto:", "La maestría en ciencia de datos")
-    n = st.slider("N", 2, 3)
-    st.write(f"{n}-grams:", list(ngrams(nltk.word_tokenize(txt.lower()), n)))
-    
-    st.table(pd.DataFrame({
-        "Modelo": ["RNN", "LSTM", "GRU"],
-        "Ventaja": ["Simplicidad", "Memoria larga", "Eficiencia"],
-        "Desventaja": ["Gradiente desvaneciente", "Costosa", "Menos potente que LSTM"]
-    }))
+    with tab3:
+        n_txt = st.text_input("N-Grams:", "Inteligencia artificial generativa")
+        n = st.slider("N", 2, 3)
+        st.write(list(ngrams(nltk.word_tokenize(n_txt.lower()), n)))
 
-# --- SECCIÓN: AGENTE CON 3 RESPUESTAS Y MÉTRICAS ---
-elif section == "Chat Multivariante (Agente)":
-    st.header("🤖 Agente Especializado: 3 Respuestas Diferentes")
+# --- SECCIÓN 2: AGENTE CON 3 RESPUESTAS Y GRÁFICOS ---
+else:
+    st.header("🤖 Agente Multivariante & Desempeño")
     
-    system_prompt = st.text_area("Personalizar System Prompt:", 
-                                "Eres un experto en Ciencia de Datos de EAFIT.")
-    user_query = st.text_input("Tu pregunta:")
-    
+    col_cfg, col_sys = st.columns([1, 2])
+    with col_cfg:
+        temp_input = st.slider("Temperatura base", 0.0, 2.0, 0.7)
+    with col_sys:
+        sys_prompt = st.text_area("System Prompt (Personalidad):", 
+                                  "Eres un consultor experto de la Universidad EAFIT.")
+
+    user_query = st.chat_input("Escribe tu consulta aquí...")
+
     if user_query:
-        # Definimos 3 niveles de temperatura para ver el cambio de parámetros
-        configuraciones = [
-            {"name": "Determinista (Factual)", "temp": 0.1},
-            {"name": "Equilibrado", "temp": 0.7},
-            {"name": "Creativo (Variado)", "temp": 1.5}
+        # Configuraciones para las 3 respuestas
+        configs = [
+            {"label": "Conservador", "temp": 0.2},
+            {"label": "Equilibrado", "temp": 0.8},
+            {"label": "Creativo", "temp": 1.6}
         ]
         
+        results = []
         cols = st.columns(3)
-        
-        for i, config in enumerate(configuraciones):
+
+        for i, cfg in enumerate(configs):
             with cols[i]:
-                st.subheader(config["name"])
-                st.caption(f"Temperatura: {config['temp']}")
+                st.subheader(cfg["label"])
+                st.caption(f"Temp: {cfg['temp']}")
                 
-                t_start = time.perf_counter()
+                t0 = time.perf_counter()
                 
-                # Llamada a la API
-                res = client.chat.completions.create(
-                    model=selected_model,
+                # Llamada a Groq
+                resp = client.chat.completions.create(
+                    model=model_name,
                     messages=[
-                        {"role": "system", "content": system_prompt},
+                        {"role": "system", "content": sys_prompt},
                         {"role": "user", "content": user_query}
                     ],
-                    temperature=config["temp"]
+                    temperature=cfg["temp"]
                 )
                 
-                t_end = time.perf_counter()
+                t1 = time.perf_counter()
                 
                 # Métricas
-                latencia = t_end - t_start
-                tokens = res.usage.completion_tokens
+                latencia = t1 - t0
+                tokens = resp.usage.completion_tokens
                 tps = tokens / latencia if latencia > 0 else 0
                 
-                # Mostrar respuesta y métricas
-                st.info(res.choices[0].message.content)
+                # Guardar para el gráfico
+                results.append({
+                    "Configuración": cfg["label"],
+                    "Latencia (s)": latencia,
+                    "TPS": tps,
+                    "Tokens": tokens
+                })
                 
-                st.metric("Latencia", f"{latencia:.2s} s")
+                st.info(resp.choices[0].message.content)
+                st.metric("Latencia", f"{latencia:.2f} s") # CORRECCIÓN AQUÍ (.2f)
                 st.metric("TPS", f"{tps:.1f}")
-                
-                # Auto-evaluación (LLM-as-a-judge) para la primera respuesta
-                if i == 1: # Evaluamos la equilibrada como muestra
-                    judge = client.chat.completions.create(
-                        model="llama-3.3-70b-versatile",
-                        messages=[{"role": "user", "content": f"Califica del 1 al 10 esta respuesta: {res.choices[0].message.content}"}]
-                    )
-                    st.write(f"**Nota Juez:** {judge.choices[0].message.content[:20]}...")
+
+        # --- SECCIÓN DE GRÁFICOS ---
+        st.divider()
+        st.subheader("📈 Análisis Comparativo de Desempeño")
+        
+        df_res = pd.DataFrame(results)
+        
+        c_gra1, c_gra2 = st.columns(2)
+        
+        with c_gra1:
+            fig_lat = px.bar(df_res, x="Configuración", y="Latencia (s)", 
+                             title="Latencia por Configuración", color="Configuración")
+            st.plotly_chart(fig_lat, use_container_width=True)
+            
+        with c_gra2:
+            fig_tps = px.line(df_res, x="Configuración", y="TPS", 
+                              title="Velocidad de Generación (TPS)", markers=True)
+            st.plotly_chart(fig_tps, use_container_width=True)
+
+        # Módulo LLM-as-a-judge (Auto-evaluación)
+        st.divider()
+        st.subheader("⚖️ Evaluación 'LLM-as-a-judge'")
+        with st.spinner("El juez está evaluando la respuesta equilibrada..."):
+            judge = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": f"Califica del 1 al 10 la veracidad de esta respuesta: {results[1]}"}]
+            )
+            st.success(f"Dictamen del Juez: {judge.choices[0].message.content}")
